@@ -1,0 +1,7 @@
+{
+  "stryker-config": {
+    "project": "StrykerRepro.csproj",
+    "verbosity": "debug",
+    "reporters": ["html", "cleartext"]
+  }
+}

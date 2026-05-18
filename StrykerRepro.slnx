@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="StrykerRepro.Tests/StrykerRepro.Tests.csproj" />
+  <Project Path="StrykerRepro/StrykerRepro.csproj" />
+</Solution>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!--
+      Explicitly opt-in to RequestDelegateGenerator, which produces
+      GeneratedRouteBuilderExtensions.g.cs containing [InterceptsLocation]
+      attributes that reference exact byte positions in source files.
+      Without this, CS9234 (Bug 1) cannot be reproduced — Stryker would have
+      nothing to break.
+    -->
+    <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+  </PropertyGroup>
+
+</Project>
