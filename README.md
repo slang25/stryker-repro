@@ -13,6 +13,8 @@ to trigger all three failures.
 
 ## Bug 1 — CS9234: RequestDelegateGenerator Interceptor Invalidation (cascade from Bug 4)
 
+> This bug only manifests as a side effect of Bug 4. See [Bug 4](#bug-4--linqmutator-false-positive-on-non-linq-append) below for the root cause.
+
 **File:** `StrykerRepro/Endpoints/GreetingEndpoints.cs`  
 **Requires:** .NET 10+ (for version-1 checksum-based `[InterceptsLocation]` format)
 
@@ -170,13 +172,58 @@ mutation analysis.
 
 ---
 
+## Bug 4 — LinqMutator False Positive on Non-LINQ `Append`
+
+**File:** `StrykerRepro/Endpoints/GreetingEndpoints.cs`
+
+### How to reproduce
+
+Point Stryker at `StrykerRepro.csproj`. The compilation error occurs in the
+first instrumented compilation. On .NET 10+ this rollback then cascades into
+[Bug 1](#bug-1--cs9234-requestdelegategenerator-interceptor-invalidation-cascade-from-bug-4).
+
+### Expected
+
+`LinqMutator` only rewrites methods on LINQ-shaped receivers (e.g.
+`IEnumerable<T>` or `System.Linq.Enumerable`). Calls to unrelated methods that
+happen to be named `Append` are left untouched.
+
+### Actual
+
+```
+CS1501: No overload for method 'Prepend' takes 3 arguments
+```
+
+`LinqMutator` rewrites `ctx.Response.Cookies.Append(name, value, options)` to
+`ctx.Response.Cookies.Prepend(name, value, options)`. `IResponseCookies` has no
+`Prepend` method, so the instrumented compilation fails.
+
+### Root cause
+
+`LinqMutator` pattern-matches on the *method name* `Append` without inspecting
+the receiver type. `Microsoft.AspNetCore.Http.IResponseCookies.Append` has
+nothing to do with LINQ, but the mutator still substitutes `Prepend` because
+the method name matches a known LINQ operator.
+
+### Suggested fix in Stryker
+
+In `LinqMutator`, before substituting `Append` → `Prepend` (and similarly for
+other LINQ method name swaps), use the semantic model to verify the receiver
+type implements `IEnumerable<T>` or that the method is declared on
+`System.Linq.Enumerable` / `System.Linq.Queryable`. This also resolves Bug 1
+directly by preventing the rollback that invalidates the source generator's
+interceptor checksums.
+
+---
+
 ## Project structure
 
 ```
-StrykerRepro.sln
+StrykerRepro.slnx                     ← XML solution file (new .slnx format)
+global.json                           ← pins SDK to 10.0.300 (Bug 1 requires .NET 10)
 ├── StrykerRepro/                     ← source project to mutate (net10.0)
 │   ├── Endpoints/
-│   │   └── GreetingEndpoints.cs      ← Bug 1 (CS9234 cascade) + Bug 4 trigger
+│   │   └── GreetingEndpoints.cs      ← Bug 1 (CS9234 cascade) + Bug 4 (LinqMutator)
 │   ├── Options/
 │   │   ├── AppOptions.cs
 │   │   └── AppOptionsExtensions.cs   ← Bug 2 (variable shadowing)
@@ -188,6 +235,6 @@ StrykerRepro.sln
 └── StrykerRepro.Tests/               ← run `dotnet stryker` from here
     ├── stryker-config.json
     ├── GreetingEndpointsTests.cs
-    ├── AppOptionsExtensionsTests.cs
+    ├── AppOptionsConfiguratorTests.cs
     └── NotificationServiceTests.cs
 ```
